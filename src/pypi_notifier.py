@@ -13,7 +13,7 @@ class PyPiNotifier:
     def __init__(self) -> None:
         self.config = Config()
         self.logger = init_logger(self.config.log_path)
-        self.logger.info("PyPiNotifiar initialized.")
+        self.logger.info("PyPiNotifier initialized.")
         self.db_conn = init_database(self.config.db_path)
         self.validate_config()
         self.run()

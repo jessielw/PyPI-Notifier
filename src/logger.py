@@ -5,7 +5,7 @@ from logging.handlers import RotatingFileHandler
 
 
 def init_logger(log_directory: Path) -> logging.Logger:
-    logger = logging.getLogger("pypi_notifiar")
+    logger = logging.getLogger("pypi_notifier")
     logger.setLevel(logging.INFO)
 
     formatter = logging.Formatter("%(asctime)s - %(levelname)s - %(message)s")
@@ -15,7 +15,7 @@ def init_logger(log_directory: Path) -> logging.Logger:
     logger.addHandler(stream_handler)
 
     file_handler = RotatingFileHandler(
-        str(log_directory / "pypi_notifiar.log"),
+        str(log_directory / "pypi_notifier.log"),
         maxBytes=5 * 1024 * 1024,
         backupCount=3,
     )
