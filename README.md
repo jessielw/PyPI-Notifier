@@ -2,6 +2,10 @@
 
 A script to notify you about new releases of Python packages via Discord webhooks. The script checks for updates on the specified packages at regular intervals, stores the information in a SQLite database, and sends notifications when a new version is released.
 
+### Supported Notification Clients:
+
+- Discord
+
 ## Prerequisites
 
 - Python 3.8 or higher
