@@ -8,7 +8,7 @@ A script to notify you about new releases of Python packages via Discord webhook
 
 ## Prerequisites
 
-- Python 3.8 or higher
+- Python 3.10 or higher
 - Docker (if using Docker setup)
 - `.env` file for environment variables (can pass variables as environment variables in Docker)
 
