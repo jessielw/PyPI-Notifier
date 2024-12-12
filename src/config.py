@@ -6,7 +6,7 @@ from pathlib import Path
 
 
 class Config:
-    if str(Path.cwd()) == "/code":
+    if str(Path.cwd()) == "/app":
         # TODO: test in docker container
         app_data: Path = Path(Path.cwd().parent / "app_data")
     else:
