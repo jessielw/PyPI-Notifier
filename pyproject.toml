@@ -1,0 +1,30 @@
+[tool.poetry]
+name = "pypi-update-notifier"
+version = "0.1.0"
+description = "Simple utility to parse PyPI packages and send notifications"
+authors = ["jlw_4049 <jessielw4049@gmail.com>"]
+license = "MIT"
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "^3.11"
+feedparser = "^6.0.11"
+python-dotenv = "^1.0.1"
+packaging = "^24.2"
+discord-webhook = "^1.3.1"
+
+
+[tool.poetry.group.dev.dependencies]
+ruff = "^0.8.3"
+
+[tool.ruff]
+line-length = 88
+
+[tool.basedpyright]
+include = ["src"]
+# ignore = ["plugins"]
+typeCheckingMode = "standard" # "off", "basic", "standard", "strict", "recommended" or "all"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
