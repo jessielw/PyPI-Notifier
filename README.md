@@ -65,7 +65,7 @@ python run_notifier.py
 
 1. Make sure you have Docker installed and running. If not, follow the [Docker installation guide](https://docs.docker.com/get-docker/).
 
-2. Pull the Docker image:
+2. Pull the Docker image [Link](https://hub.docker.com/repository/docker/jlw4049/pypi-update-notifier/):
 
    ```bash
    docker pull jlw4049/pypi-update-notifier
