@@ -164,3 +164,4 @@ cython_debug/
 .vscode/settings.json
 *.db
 start.py
+docker_commands.txt
