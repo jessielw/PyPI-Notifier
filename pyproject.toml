@@ -1,11 +1,10 @@
 [tool.poetry]
-name = "pypi-update-notifier"
-version = "0.1.0"
+name = "pypi-notifier"
+version = "0.3.0"
 description = "Simple utility to parse PyPI packages and send notifications"
 authors = ["jlw_4049 <jessielw4049@gmail.com>"]
 license = "MIT"
 readme = "README.md"
-package-mode = false
 
 [tool.poetry.dependencies]
 python = "^3.10"
