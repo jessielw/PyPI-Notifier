@@ -15,7 +15,9 @@ ENV IN_DOCKER="true"
 RUN echo '#!/bin/bash' > /app/start-cron.sh && \
     echo 'echo "$CRON_SCHEDULE python3 /app/run_notifier.py" > /etc/cron.d/pypi_notifier_cron' >> /app/start-cron.sh && \
     echo 'chmod 0644 /etc/cron.d/pypi_notifier_cron && crontab /etc/cron.d/pypi_notifier_cron' >> /app/start-cron.sh && \
-    echo 'cron && tail -f /var/log/cron.log' >> /app/start-cron.sh && \
+    echo 'cron > /var/log/cron.log 2>&1 &' >> /app/start-cron.sh && \
+    echo 'tail -f /var/log/cron.log' >> /app/start-cron.sh && \
     chmod +x /app/start-cron.sh
+
 
 CMD ["/app/start-cron.sh"]
