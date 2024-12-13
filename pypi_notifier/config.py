@@ -3,10 +3,14 @@ import os
 from dotenv import load_dotenv
 from pathlib import Path
 
+# TODO: test all of these changes for both docker and python
+
 
 class Config:
-    if str(Path.cwd()) == "/app":
-        app_data: Path = Path(Path.cwd().parent / "app_data")
+    in_docker = True if os.environ.get("IN_DOCKER") == "true" else False
+
+    if in_docker:
+        app_data = Path("/app_data")
     else:
         load_dotenv()  # pyright: ignore [reportUnusedCallResult]
         app_data = Path(Path.cwd() / "app_data")
@@ -17,8 +21,8 @@ class Config:
     app_data.mkdir(exist_ok=True, parents=True)
     log_path.mkdir(exist_ok=True, parents=True)
 
-    DISCORD_WEBHOOK: str = os.environ.get("DISCORD_WEBHOOK", "")
-    TRACKED_PACKAGES: dict[str, str] = json.loads(
+    discord_webhook: str = os.environ.get("DISCORD_WEBHOOK", "")
+    tracked_packages: dict[str, str] = json.loads(
         os.environ.get("TRACKED_PACKAGES", "")
     )
-    INTERVAL: int = int(os.environ.get("INTERVAL", 0))
+    interval: int = int(os.environ.get("INTERVAL", 0))
