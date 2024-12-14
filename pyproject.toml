@@ -3,8 +3,29 @@ name = "pypi-notifier"
 version = "0.1.0"
 description = "Simple utility to parse PyPI packages and send notifications"
 authors = ["jlw_4049 <jessielw4049@gmail.com>"]
+maintainers = ["jlw_4049 <jessielw4049@gmail.com>"]
+keywords = ["python", "notifications", "watch", "update", "pypi", "packages"]
 license = "MIT"
 readme = "README.md"
+classifiers = [
+    "License :: OSI Approved :: MIT License",
+    "Development Status :: 5 - Production/Stable",
+    "Intended Audience :: Developers",
+    "Operating System :: OS Independent",
+    "Environment :: Console",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: Implementation :: CPython",
+    "Topic :: Utilities",
+]
+
+[tool.project.urls]
+"Homepage" = "https://github.com/jessielw/PyPI-Notifier"
+"Source" = "https://github.com/jessielw/PyPI-Notifier"
 
 [tool.poetry.dependencies]
 python = "^3.10"
