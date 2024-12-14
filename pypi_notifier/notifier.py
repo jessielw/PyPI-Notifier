@@ -1,3 +1,5 @@
+from apscheduler.schedulers.background import BackgroundScheduler
+from apscheduler.triggers.cron import CronTrigger
 from datetime import datetime
 from discord_webhook import DiscordWebhook
 from feedparser import parse as feed_parse
@@ -14,7 +16,7 @@ class PyPiNotifier:
         self,
         discord_webhook: str | None = None,
         tracked_packages: dict[str, str] | None = None,
-        interval: int | None = None,
+        cron_schedule: str | None = None,
     ) -> None:
         self.config = Config()
 
@@ -23,18 +25,15 @@ class PyPiNotifier:
             not self.config.in_docker
             and discord_webhook
             and tracked_packages
-            and interval
+            and cron_schedule
         ):
             self.config.discord_webhook = discord_webhook
             self.config.tracked_packages = tracked_packages
-            self.config.interval = interval
+            self.config.cron_schedule = cron_schedule
 
         self.logger = init_logger(self.config.log_path)
         self.validate_config()
         self.db_conn = init_database(self.config.db_path)
-
-        if self.config.in_docker:
-            self.run()
 
     def validate_config(self) -> None:
         def validate_field(value, field_name, expected_type):
@@ -47,10 +46,7 @@ class PyPiNotifier:
 
         validate_field(self.config.discord_webhook, "Discord webhook", str)
         validate_field(self.config.tracked_packages, "Tracked packages", dict)
-        validate_field(self.config.interval, "Interval", int)
-
-        if self.config.interval <= 0:
-            raise ValueError("Interval should be greater than 0.")
+        validate_field(self.config.cron_schedule, "Cron schedule", str)
 
     def check_updates(self) -> None:
         """Check for updates and notify if a new version is found."""
@@ -136,13 +132,21 @@ class PyPiNotifier:
                     self.logger.critical("Max retries reached. Exiting with failure.")
 
     def run(self) -> None:
-        """Run the script once (for cron-based execution)."""
+        """Run the script once (for user-based execution)."""
         self.check_updates()
 
     def run_forever(self) -> None:
-        """Run the script in a loop (for scheduler-based execution)."""
+        """Run the script using APScheduler (for scheduler-based execution)."""
         self.logger.info("PyPiNotifier initialized.")
-        while True:
-            self.check_updates()
-            self.logger.debug(f"Sleeping for {self.config.interval} seconds...")
-            sleep(self.config.interval)
+
+        scheduler = BackgroundScheduler()
+        cron_schedule = CronTrigger.from_crontab(self.config.cron_schedule)
+        scheduler.add_job(self.check_updates, cron_schedule)
+        scheduler.start()
+
+        # keep main thread alive
+        try:
+            while True:
+                sleep(1)
+        except (KeyboardInterrupt, SystemExit):
+            scheduler.shutdown()

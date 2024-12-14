@@ -25,4 +25,4 @@ class Config:
     tracked_packages: dict[str, str] = json.loads(
         os.environ.get("TRACKED_PACKAGES", "")
     )
-    interval: int = int(os.environ.get("INTERVAL", 0))
+    cron_schedule = os.environ.get("CRON_SCHEDULE", "0 * * * *")
