@@ -17,8 +17,8 @@ Upon initial launch, no notifications will be sent until a **new update** is det
 
 #### Options for Use
 
-- Docker
-- Package
+- Docker ([link](https://hub.docker.com/repository/docker/jlw4049/pypi-notifier/))
+- Package ([link](https://pypi.org/project/pypi-notifier/))
 
 #### Running the Script as a Package
 
