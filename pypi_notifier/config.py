@@ -3,8 +3,6 @@ import os
 from dotenv import load_dotenv
 from pathlib import Path
 
-# TODO: test all of these changes for both docker and python
-
 
 class Config:
     in_docker = True if os.environ.get("IN_DOCKER") == "true" else False
