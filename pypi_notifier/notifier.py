@@ -3,6 +3,7 @@ from apscheduler.triggers.cron import CronTrigger
 from datetime import datetime
 from discord_webhook import DiscordWebhook
 from feedparser import parse as feed_parse
+from random import uniform as random_uniform
 from requests.exceptions import Timeout
 from time import sleep
 from threading import Thread
@@ -13,6 +14,10 @@ from queue import Queue, Empty
 from .logger import init_logger
 from .config import Config
 from .database import init_database, db_worker_insert, db_worker_select
+
+# TODO: test in docker and update readme
+# TODO: exec into the docker image while it's running to ensure we don't have anything included that we need
+# TODO: make a pypi package
 
 
 class PyPiNotifier:
@@ -25,12 +30,11 @@ class PyPiNotifier:
         self.config = Config()
 
         # update config only if not running in Docker and arguments are provided
-        if (
-            not self.config.in_docker
-            and discord_webhook
-            and tracked_packages
-            and cron_schedule
-        ):
+        if not self.config.in_docker:
+            if not discord_webhook or not tracked_packages or not cron_schedule:
+                raise ValueError(
+                    "You must provide all arguments if not running in docker."
+                )
             self.config.discord_webhook = discord_webhook
             self.config.tracked_packages = tracked_packages
             self.config.cron_schedule = cron_schedule
@@ -44,6 +48,7 @@ class PyPiNotifier:
 
         # database queued vars
         self.db_queue = Queue()
+        self.db_response_queue = Queue()
         self.db_thread: Thread | None = None
 
     def initialize_db_worker(self):
@@ -73,13 +78,13 @@ class PyPiNotifier:
         pending_changes = False
         while True:
             try:
-                operation, args, response_queue = self.db_queue.get_nowait()
+                operation, args = self.db_queue.get_nowait()
                 if operation == "insert":
                     db_worker_insert(db_conn, *args)
                     pending_changes = True
                 elif operation == "select":
                     result = db_worker_select(db_conn, *args)
-                    response_queue.put(result)
+                    self.db_response_queue.put(result)
                 elif operation == "write":
                     if pending_changes:
                         db_conn.commit()
@@ -95,10 +100,11 @@ class PyPiNotifier:
 
     def get_db_select(self, url: str) -> tuple | None:
         if self.use_db_queue:
-            response_queue = Queue()
-            self.db_queue.put(("select", (url,), response_queue))
+            self.db_queue.put(("select", (url,)))
             try:
-                return response_queue.get(timeout=5)
+                result = self.db_response_queue.get(timeout=5)
+                self.db_response_queue.task_done()
+                return result
             except Empty:
                 return None
         else:
@@ -108,9 +114,7 @@ class PyPiNotifier:
 
     def insert_into_db(self, package_name, url, version, last_updated):
         if self.use_db_queue:
-            self.db_queue.put(
-                ("insert", (package_name, url, version, last_updated), None)
-            )
+            self.db_queue.put(("insert", (package_name, url, version, last_updated)))
         else:
             if not self.db_conn:
                 raise AttributeError("Could not detect database connection.")
@@ -158,16 +162,18 @@ class PyPiNotifier:
         if not self.use_db_queue:
             self.db_conn.commit()
         else:
-            self.db_queue.put(("write", None, None))
+            self.db_queue.put(("write", None))
 
     def format_timestamp(self, published_str: str) -> str:
         """Format timestamp to ISO format."""
         return datetime.strptime(published_str, "%a, %d %b %Y %H:%M:%S GMT").isoformat()
 
     def notify(self, package_name: str, version: str, release_url: str) -> None:
-        """Send a Discord notification for a new version."""
-        MAX_RETRIES = 3
-        RETRY_DELAY = 5
+        """Send a Discord notification for a new version with exponential backoff retries."""
+        MAX_RETRIES = 5
+        BASE_DELAY = 2
+        MAX_DELAY = 60
+
         notification = f"**{package_name} v{version}** [available]({release_url})"
         for attempt in range(MAX_RETRIES):
             try:
@@ -179,11 +185,18 @@ class PyPiNotifier:
                 return
             except Timeout as e:
                 self.logger.warning(f"Error sending webhook: {e}")
+
                 if attempt < MAX_RETRIES - 1:
-                    self.logger.warning(f"Retrying in {RETRY_DELAY} seconds...")
-                    sleep(RETRY_DELAY)
+                    delay = min(BASE_DELAY * (2**attempt), MAX_DELAY)
+                    delay += random_uniform(0, 1)
+                    self.logger.warning(
+                        f"Retrying in {delay:.2f} seconds (attempt {attempt + 1}/{MAX_RETRIES})..."
+                    )
+                    sleep(delay)
                 else:
-                    self.logger.critical("Max retries reached. Exiting with failure.")
+                    self.logger.critical(
+                        "Max retries reached. Notification failed permanently."
+                    )
 
     def run(self) -> None:
         """Run the script once (for user-based execution)."""
@@ -192,7 +205,9 @@ class PyPiNotifier:
 
     def run_forever(self) -> None:
         """Run the script using APScheduler (for scheduler-based execution)."""
-        self.logger.info("PyPiNotifier initialized.")
+        self.logger.info(
+            f"PyPiNotifier initialized (CRON schedule: {self.config.cron_schedule})."
+        )
         self.use_db_queue = True
         self.initialize_db_worker()
         self.check_updates()
@@ -208,5 +223,5 @@ class PyPiNotifier:
                 sleep(1)
         except (KeyboardInterrupt, SystemExit):
             if self.use_db_queue:
-                self.db_queue.put(("exit", None, None))
+                self.db_queue.put(("exit", None))
             scheduler.shutdown()
