@@ -4,11 +4,15 @@ from datetime import datetime
 from discord_webhook import DiscordWebhook
 from feedparser import parse as feed_parse
 from requests.exceptions import Timeout
-from packaging.version import parse as parse_version
 from time import sleep
+from threading import Thread
+from sqlite3 import Connection
+from packaging.version import parse as parse_version
+from queue import Queue, Empty
+
 from .logger import init_logger
 from .config import Config
-from .database import init_database
+from .database import init_database, db_worker_insert, db_worker_select
 
 
 class PyPiNotifier:
@@ -33,7 +37,22 @@ class PyPiNotifier:
 
         self.logger = init_logger(self.config.log_path)
         self.validate_config()
-        self.db_conn = init_database(self.config.db_path)
+
+        # database
+        self.db_conn: Connection | None = None
+        self.use_db_queue: bool = False
+
+        # database queued vars
+        self.db_queue = Queue()
+        self.db_thread: Thread | None = None
+
+    def initialize_db_worker(self):
+        """Initialize the database worker thread if needed."""
+        if not self.use_db_queue:
+            return
+
+        self.db_thread = Thread(target=self.db_worker, daemon=True)
+        self.db_thread.start()
 
     def validate_config(self) -> None:
         def validate_field(value, field_name, expected_type):
@@ -48,9 +67,62 @@ class PyPiNotifier:
         validate_field(self.config.tracked_packages, "Tracked packages", dict)
         validate_field(self.config.cron_schedule, "Cron schedule", str)
 
+    def db_worker(self) -> None:
+        """Worker thread to handle database operations."""
+        db_conn = init_database(self.config.db_path)
+        pending_changes = False
+        while True:
+            try:
+                operation, args, response_queue = self.db_queue.get_nowait()
+                if operation == "insert":
+                    db_worker_insert(db_conn, *args)
+                    pending_changes = True
+                elif operation == "select":
+                    result = db_worker_select(db_conn, *args)
+                    response_queue.put(result)
+                elif operation == "write":
+                    if pending_changes:
+                        db_conn.commit()
+                        pending_changes = False
+                elif operation == "exit":
+                    if pending_changes:
+                        db_conn.commit()
+                    db_conn.close()
+                    break
+                self.db_queue.task_done()
+            except Empty:
+                sleep(0.25)
+
+    def get_db_select(self, url: str) -> tuple | None:
+        if self.use_db_queue:
+            response_queue = Queue()
+            self.db_queue.put(("select", (url,), response_queue))
+            try:
+                return response_queue.get(timeout=5)
+            except Empty:
+                return None
+        else:
+            if not self.db_conn:
+                raise AttributeError("Could not detect database connection.")
+            return db_worker_select(self.db_conn, url)
+
+    def insert_into_db(self, package_name, url, version, last_updated):
+        if self.use_db_queue:
+            self.db_queue.put(
+                ("insert", (package_name, url, version, last_updated), None)
+            )
+        else:
+            if not self.db_conn:
+                raise AttributeError("Could not detect database connection.")
+            db_worker_insert(self.db_conn, package_name, url, version, last_updated)
+
     def check_updates(self) -> None:
         """Check for updates and notify if a new version is found."""
         self.logger.info("Checking for updates.")
+
+        if not self.db_conn:
+            self.db_conn = init_database(self.config.db_path)
+
         for package_name, url in self.config.tracked_packages.items():
             feed = feed_parse(url)
             for entry in feed.get("entries", []):
@@ -62,53 +134,35 @@ class PyPiNotifier:
                     last_updated = self.format_timestamp(last_updated)
 
                     # check if package exists in the database
-                    cursor = self.db_conn.execute(
-                        "SELECT last_updated, version FROM releases WHERE url = ?",
-                        (url,),
-                    )
-                    row = cursor.fetchone()
+                    row = self.get_db_select(url)
 
-                    if row is None:
-                        # new package, add to database
+                    # new package, add to database
+                    if not row:
                         self.logger.info(
                             f"New package added to database: {package_name}"
                         )
-                        self.update_last_updated(
-                            url, package_name, version, last_updated
-                        )
+                        self.insert_into_db(package_name, url, version, last_updated)
+
+                    # existing package, check for updates
                     else:
-                        # existing package, check for updates
                         stored_version = row[1]
                         if parse_version(version) > parse_version(stored_version):
                             self.logger.info(
                                 f"New version detected for {package_name}: {version}"
                             )
                             self.notify(package_name, version, parsed_link)
-                            self.update_last_updated(
-                                url, package_name, version, last_updated
+                            self.insert_into_db(
+                                package_name, url, version, last_updated
                             )
 
-                    self.db_conn.commit()
+        if not self.use_db_queue:
+            self.db_conn.commit()
+        else:
+            self.db_queue.put(("write", None, None))
 
     def format_timestamp(self, published_str: str) -> str:
         """Format timestamp to ISO format."""
         return datetime.strptime(published_str, "%a, %d %b %Y %H:%M:%S GMT").isoformat()
-
-    def update_last_updated(
-        self, release_url: str, package_name: str, version: str, last_updated: str
-    ) -> None:
-        """Update the database with the latest version and timestamp."""
-        with self.db_conn:
-            self.db_conn.execute(
-                """
-                INSERT INTO releases (package_name, url, version, last_updated) 
-                VALUES (?, ?, ?, ?) 
-                ON CONFLICT(url) DO UPDATE SET
-                    version = excluded.version,
-                    last_updated = excluded.last_updated
-            """,
-                (package_name, release_url, version, last_updated),
-            )
 
     def notify(self, package_name: str, version: str, release_url: str) -> None:
         """Send a Discord notification for a new version."""
@@ -133,11 +187,15 @@ class PyPiNotifier:
 
     def run(self) -> None:
         """Run the script once (for user-based execution)."""
+        self.use_db_queue = False
         self.check_updates()
 
     def run_forever(self) -> None:
         """Run the script using APScheduler (for scheduler-based execution)."""
         self.logger.info("PyPiNotifier initialized.")
+        self.use_db_queue = True
+        self.initialize_db_worker()
+        self.check_updates()
 
         scheduler = BackgroundScheduler()
         cron_schedule = CronTrigger.from_crontab(self.config.cron_schedule)
@@ -149,4 +207,6 @@ class PyPiNotifier:
             while True:
                 sleep(1)
         except (KeyboardInterrupt, SystemExit):
+            if self.use_db_queue:
+                self.db_queue.put(("exit", None, None))
             scheduler.shutdown()
