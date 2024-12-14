@@ -7,4 +7,4 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 ENV IN_DOCKER="true"
 
-CMD ["python", "-c", "from pypi_notifier import PyPiNotifier; PyPiNotifier().run_forever()"]
+CMD ["python", "run_notifier.py"]
