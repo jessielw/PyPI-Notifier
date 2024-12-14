@@ -15,10 +15,6 @@ from .logger import init_logger
 from .config import Config
 from .database import init_database, db_worker_insert, db_worker_select
 
-# TODO: test in docker and update readme
-# TODO: exec into the docker image while it's running to ensure we don't have anything included that we need
-# TODO: make a pypi package
-
 
 class PyPiNotifier:
     def __init__(
