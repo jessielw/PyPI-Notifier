@@ -1,3 +1,4 @@
+import asyncio
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
 from datetime import datetime
@@ -199,6 +200,15 @@ class PyPiNotifier:
         self.use_db_queue = False
         self.check_updates()
 
+    async def _keep_alive(self, scheduler: BackgroundScheduler):
+        try:
+            while True:
+                await asyncio.sleep(1)
+        except (KeyboardInterrupt, SystemExit):
+            if self.use_db_queue:
+                self.db_queue.put(("exit", None))
+            scheduler.shutdown()
+
     def run_forever(self) -> None:
         """Run the script using APScheduler (for scheduler-based execution)."""
         self.logger.info(
@@ -214,10 +224,4 @@ class PyPiNotifier:
         scheduler.start()
 
         # keep main thread alive
-        try:
-            while True:
-                sleep(1)
-        except (KeyboardInterrupt, SystemExit):
-            if self.use_db_queue:
-                self.db_queue.put(("exit", None))
-            scheduler.shutdown()
+        asyncio.run(self._keep_alive(scheduler))
