@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "pypi-notifier"
-version = "0.1.1"
+version = "0.1.2"
 description = "Simple utility to parse PyPI packages and send notifications"
 authors = ["jlw_4049 <jessielw4049@gmail.com>"]
 maintainers = ["jlw_4049 <jessielw4049@gmail.com>"]
