@@ -43,7 +43,7 @@ ruff = "^0.8.3"
 line-length = 88
 
 [tool.basedpyright]
-include = ["src"]
+include = ["pypi_notifier"]
 # ignore = ["plugins"]
 typeCheckingMode = "standard" # "off", "basic", "standard", "strict", "recommended" or "all"
 
